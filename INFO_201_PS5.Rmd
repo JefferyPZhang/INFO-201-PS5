@@ -1,0 +1,356 @@
+---
+title: "PS5"
+author: "Jeffery Zhang"
+class: "INFO 201"
+TA: "Xinyu Chang (AD)"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## ---------- PS5: RMarkdown and Plotting ----------
+
+```{r library_retrieval}
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+```
+
+This is for library setup. Library lubridate helps to convert month/day format to day # of the year.
+
+## 1.1.1
+```{r get_flight_data}
+nyc_flights <- read_delim("C:/Users/xuz-t/OneDrive/Documents/INFO_201_Scripts/PS5/data/nycflights.csv")
+print(nyc_flights)
+```
+
+This is to extract data from the .csv file. Looks fine.
+
+## 1.1.2
+```{r dest_info}
+codes_not_three_chars <- nyc_flights$origin[nchar(nyc_flights$dest) != 3]
+codes_with_digits <- nyc_flights$origin[grepl("[0-9]", nyc_flights$dest)]
+print(codes_not_three_chars)
+print(codes_with_digits)
+```
+
+No, there are no airport codes that either are not three characters long or contain digits.
+
+## 1.1.3
+```{r missing_arrival_delays}
+missing_arrival_delays <- sum(is.na(nyc_flights$arr_delay))
+```
+
+There are no missing arrival delay data. Therefore, it is not a problem for this data.
+
+## 1.1.4
+
+Checking the .csv file, there doesn't seem to be any problematic values for the delay variable.
+
+## 1.1.5
+```{r avg_dest_delay}
+average_delay_by_dest <- aggregate(arr_delay ~ dest, data = nyc_flights, FUN = function(x) mean(x, na.rm = TRUE))
+sorted_destinations <- average_delay_by_dest[order(-average_delay_by_dest$arr_delay), ]
+top_three_destinations <- head(sorted_destinations, 3)
+worst_3_flights <- data.frame("Destination" =  top_three_destinations$dest, "AvgDelay" = top_three_destinations$arr_delay)
+print(worst_3_flights)
+```
+
+These are the destinations with the worst delay times.
+
+## 1.1.6
+```{r avg_delay_month}
+average_delay_by_month <- aggregate(arr_delay ~ month, data = nyc_flights, FUN = function(x) mean(x, na.rm = TRUE))
+print(average_delay_by_month)
+```
+
+These are the average delays by month.
+
+## 1.1.7
+```{r avg_delay_barplot}
+bar_colors <- rainbow(12)
+barplot(average_delay_by_month$arr_delay, names.arg = average_delay_by_month$month, col = bar_colors,
+        main = "Average Delay by Month",
+        xlab = "Month",
+        ylab = "Average Delay (minutes)")
+```
+
+This is a rainbow barplot illustrating the average delay (in minutes) by month. There is no overall pattern, but something to note is the sudden dip after July, before rising back up in September.
+
+## 1.1.8
+```{r avg_delay_scatter}
+nyc_flights <- nyc_flights %>%
+  mutate(date = as.Date(paste(year, month, day, sep = "-")))
+nyc_flights$day_of_year <- yday(nyc_flights$date)
+average_delay_by_day <- aggregate(arr_delay ~ day_of_year, data = nyc_flights, FUN = function(x) mean(x, na.rm = TRUE))
+ggplot(nyc_flights, aes(x = day_of_year, y = arr_delay, col = factor(day_of_year))) +
+  geom_point(alpha = 0.5, size = 2, show.legend = FALSE) +
+  labs(x = "Day of Year", y = "Arrival Delay (minutes)", title = "Daily Arrival Delays in 2013") +
+  theme_minimal()
+```
+
+This is an illustration of average delays for every day of the year. It seems like delays are slightly more common in the summer, but not by all that much.
+
+## ---------- 1.2: Chicago ----------
+
+## 1.2.1
+```{r num_flight_to_chicago}
+flights_to_ORD <- nyc_flights[nyc_flights$dest == "ORD", ]
+num_flights_to_ORD <- nrow(flights_to_ORD)
+cat(num_flights_to_ORD)
+```
+
+This is the number of flights to Chicago.
+
+## 1.2.2
+```{r fastest_flight_to_chicago}
+fastest_flight_index <- which.min(flights_to_ORD$air_time)
+fastest_flight <- flights_to_ORD[fastest_flight_index, ]
+cat("Departure date of the fastest flight: ", fastest_flight$month, "-", fastest_flight$day, "\n")
+cat("Departure time of the fastest flight: ", fastest_flight$dep_time, "\n")
+cat("Air time of the fastest flight: ", fastest_flight$air_time, " minutes\n")
+cat("Carrier of the fastest flight: ", fastest_flight$carrier, "\n")
+cat("Original airport of the fastest flight: ", fastest_flight$origin, "\n")
+```
+
+This is the fastest flight to Chicago and relevant information about the given flight.
+
+## 1.2.3
+
+According to Google Flights, it takes approximately 3 hours to fly from New York to Chicago. Therefore, 92 minutes (which is the flight time for this specific flight) doesn't seem to be reasonable.
+
+## 1.2.4
+```{r slowest_flight_to_chicago}
+slowest_flight_index <- which.max(flights_to_ORD$air_time)
+slowest_flight <- flights_to_ORD[slowest_flight_index, ]
+cat("Departure date of the slowest flight: ", slowest_flight$month, "-", fastest_flight$day, "\n")
+cat("Departure time of the slowest flight: ", slowest_flight$dep_time, "\n")
+cat("Air time of the slowest flight: ", slowest_flight$air_time, " minutes\n")
+cat("Carrier of the slowest flight: ", slowest_flight$carrier, "\n")
+cat("Original airport of the slowest flight: ", slowest_flight$origin, "\n")
+```
+
+This is the slowest flight to Chicago and relevant information about the given flight. This flight would actually be still faster than most flights that I see on Google Flights.
+
+## 1.2.5
+```{r flight_speed_analysis}
+flights_to_ORD$speed <- (flights_to_ORD$distance / flights_to_ORD$air_time) * 60
+selected_flights <- rev(rbind(head(flights_to_ORD[order(flights_to_ORD$speed), ], 3), tail(flights_to_ORD[order(flights_to_ORD$speed), ], 3)))
+cat(" date\t", "deptime carrier delay\t", "speed\n", paste(selected_flights$month, "-", selected_flights$day, " ", selected_flights$dep_time, "\t", selected_flights$carrier, "\t", selected_flights$dep_delay, "\t", round(selected_flights$speed, 2), "\n"))
+```
+
+Theses are the speeds of both the three fastest and slowest flights to Chicago, and relevant information about the given flight.
+
+## 1.2.6
+```{r speed_delay_analysis}
+ggplot(flights_to_ORD, aes(x = speed, y = dep_delay)) +
+  geom_point(alpha = 0.7, size = 3) +
+  labs(title = "Flight Speed vs. Departure Delay for Flights to Chicago",
+       x = "Flight Speed (mph)",
+       y = "Departure Delay (minutes)") +
+  theme_minimal()
+```
+Try as I might, I couldn't find any clear correlation between the departure delay and the flight speed. The only plot structure that made sense to me was a scatterplot, given the amount of data, I tried using a logscale for both of the axes (and tried both cases where only one has a logscale), and it still looked random. Therefore, I simply left it as a linear scale. I do see, though, that a lot of the data seems to be clustered around the bottom-middle of the graph (around 300-400 mph and 0 departure delay).
+
+## ---------- 2: Gapminder Data ----------
+
+## ---------- 2.1: Descriptive Stats ----------
+
+## 2.1.1
+```{r gap_minder_setup}
+gapminder <- read_delim("C:/Users/xuz-t/OneDrive/Documents/INFO_201_Scripts/PS5/data/gapminder.csv")
+gapminder_dims <- dim(gapminder)
+print(gapminder_dims)
+```
+
+There are 13055 rows and 25 columns in this data.
+
+## 2.1.2
+```{r gapminder_head}
+head(gapminder)
+```
+
+These is a sneakpeek of the gapminder dataset. It looks good.
+
+## 2.1.3
+```{r country_nums}
+num_unique_iso3 <- gapminder %>% pull(iso3) %>% unique() %>% length()
+num_unique_iso2 <- gapminder %>% pull(iso2) %>% unique() %>% length()
+num_unique_name <- gapminder %>% pull(name) %>% unique() %>% length()
+cat(num_unique_iso3, "\n")
+cat(num_unique_iso2, "\n")
+cat(num_unique_name)
+```
+
+According to iso3, there are 253 countries. According to iso2, there are 249 countries. According to the number of unique names, there are 250 countries.
+
+## 2.1.4
+```{r non_unique_iso}
+nonunique_names_iso2 <- gapminder %>%
+  distinct(name, iso2, .keep_all = TRUE) %>%
+  group_by(iso2) %>%
+  summarise(name_counts = n(), unique_names = toString(unique(name))) %>%
+  filter(name_counts > 1)
+nonunique_iso3_names <- gapminder %>%
+  distinct(name, iso3, .keep_all = TRUE) %>%
+  group_by(name) %>%
+  summarise(iso3_counts = n(), unique_iso3 = toString(unique(iso3))) %>%
+  filter(iso3_counts > 1)
+print(nonunique_names_iso2)
+print(nonunique_iso3_names)
+```
+
+The iso2 with non-unique names is NA, which is the iso2 entry for both the NA entry and Namibia. The iso3's with non-unique names are CHANISL, GBM, KOS, and NLD_CURACAO, all of which correspond to an NA entry.
+
+### ---------- 2.2: CO2 Emissions ----------
+
+## 2.2.1
+```{r CO2_plot}
+selected_countries <- c("United States of America", "China", "India", "Canada", "Peru")
+selected_data <- gapminder[gapminder$name %in% selected_countries, ]
+ggplot(selected_data, aes(x = time, y = co2)) +
+  geom_line(aes(color = name), size = 1, na.rm = TRUE) +
+  labs(title = "Total CO2 Emissions Over Time",
+       x = "Year",
+       y = "Total CO2 Emissions (kt)",
+       color = "Country") +
+  theme_minimal()
+```
+
+I see that China's CO2 emission has had rapid growth, India's has had some growth, while all the other countries have stayed relatively the same, relative to their already existing amounts of CO2 emissions.
+
+## 2.2.2
+```{r co2_capita_plot}
+ggplot(selected_data, aes(x = time, y = co2_PC)) +
+  geom_line(aes(color = name), size = 1, na.rm = TRUE) +
+  labs(title = "CO2 Emissions Per Capita Over Time",
+       x = "Year",
+       y = "CO2 Emissions Per Capita (metric tons per capita)",
+       color = "Country") +
+  theme_minimal()
+```
+
+I see that while China's CO2 emission per capita has grown, the US's and Canada's emission per capita is by far the greatest.
+
+## 2.2.3
+```{r avg_CO2_continents}
+filtered_data <- gapminder %>% filter(time %in% c(1960, 2016))
+average_co2_pc <- filtered_data %>%
+  group_by(region, time) %>%
+  summarise(avg_co2_pc = mean(co2_PC, na.rm = TRUE), .groups = 'drop')
+average_co2_pc <- na.omit(average_co2_pc)
+print(average_co2_pc)
+```
+
+I see a couple of things - Africa's is low, America's has dropped significantly between 1960 and 2016, while Asia's has significantly grown from 1960 to 2016.
+
+## 2.2.4
+```{r barplot_1960_2016}
+ggplot(average_co2_pc, aes(x = region, y = avg_co2_pc, fill = factor(time))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Average CO2 Emissions Per Capita Across Continents",
+       x = "Continent",
+       y = "Average CO2 Emissions Per Capita (metric tons per capita)",
+       fill = "Year") +
+  theme_minimal()
+```
+
+This data visually confirms the conclusions that I drew from the tabular data.
+
+### ---------- 2.3: Life Expectancy & Fertility ----------
+
+## 2.3.1
+```{r fertility_le1960_scatter}
+data_1960 <- gapminder[gapminder$time == 1960, ]
+ggplot(data_1960, aes(x = fertilityRate, y = lifeExpectancy, size = totalPopulation, color = region)) +
+  geom_point(alpha = 0.7, na.rm = TRUE) +
+  scale_size_continuous(labels = scales::comma) +
+  labs(title = "Scatterplot of Total Fertility vs Life Expectancy (1960)",
+       x = "Total Fertility",
+       y = "Life Expectancy",
+       size = "Total Population",
+       color = "Continent") +
+  theme_minimal()
+```
+
+I see that there is generally a negative correlation between Life Expectancy and Total Fertility. Furthermore, Europe seems to dominate the top-left of the graph, while Africa dominates the bottom right area of the graph.
+
+## 2.3.2
+```{r fertility_le2019_scatter}
+data_2019 <- gapminder[gapminder$time == 2019, ]
+ggplot(data_2019, aes(x = fertilityRate, y = lifeExpectancy, size = totalPopulation, color = region)) +
+  geom_point(alpha = 0.7, na.rm = TRUE) +
+  scale_size_continuous(labels = scales::comma) +
+  labs(title = "Scatterplot of Total Fertility vs Life Expectancy (2019)",
+       x = "Total Fertility",
+       y = "Life Expectancy",
+       size = "Total Population",
+       color = "Continent") +
+  theme_minimal()
+```
+
+## 2.3.3
+
+In comparison to 1960, both life expectancy has risen and fertility rates have generally gone down. Both America and Asia have drastically moved to the left, and Africa has spread away from the bottom right corner of the graph. The world developed in a way where life expectancy has increased, necessitating less births for the hope that they grow to adults.
+
+## 2.3.4
+```{r le_1960_2019}
+data_1960_2019 <- gapminder %>% filter(time %in% c(1960, 2019))
+average_life_expectancy <- data_1960_2019 %>%
+  group_by(region, time) %>%
+  summarise(avg_life_expectancy = mean(lifeExpectancy, na.rm = TRUE), .groups = 'drop')
+average_life_expectancy <- na.omit(average_life_expectancy)
+print(average_life_expectancy)
+```
+
+Yes, this information fits with what I saw on the previous figures.
+
+## 2.3.5
+```{r avg_LE_growth_continents}
+growth <- average_life_expectancy[average_life_expectancy$time == 2019, ]$avg_life_expectancy -
+          average_life_expectancy[average_life_expectancy$time == 1960, ]$avg_life_expectancy
+growth_df <- data.frame(Continent = unique(average_life_expectancy$region),
+                        Growth = growth)
+print(growth_df)
+```
+
+I see that both Africa's and Asia's life expectancy have increased the most, while Oceania's has increased the least.
+
+## 2.3.6
+```{r fertility_life_expectancy_space}
+selected_countries <- c("United States", "Sweden", "China", "India", "Brazil", "Nigeria")
+data_selected_countries <- gapminder[gapminder$name %in% selected_countries, ]
+ggplot(data_selected_countries, aes(x = fertilityRate, y = lifeExpectancy, color = name, group = name)) +
+  geom_point(alpha = 0.7, size = 2) +
+  labs(title = "Movement of Countries in Total Fertility–Life Expectancy Space",
+       x = "Total Fertility",
+       y = "Life Expectancy",
+       color = "Country") +
+  theme_minimal()
+```
+
+## 2.3.7
+```{r US_le_ranking}
+data_1960_ranked <- data_1960 %>%
+  arrange(desc(lifeExpectancy)) %>%
+  mutate(lifeExpectancyRank = row_number())
+rank_1960_usa <- data_1960_ranked %>%
+  filter(name == "United States of America")
+data_2019_ranked <- data_2019 %>%
+  arrange(desc(lifeExpectancy)) %>%
+  mutate(lifeExpectancyRank = row_number())
+rank_2019_usa <- data_2019_ranked %>%
+  filter(name == "United States of America")
+
+cat(rank_1960_usa$lifeExpectancyRank, "\n")
+cat(rank_2019_usa$lifeExpectancyRank, "\n")
+```
+
+The ranking of the US in life expectancy for 1960 was: 18
+The ranking of the US in life expectancy for 2019 was: 47
+
+I've spent about 10 hours on this assignment.
